@@ -15,6 +15,16 @@ app.use("/api/auth", authRoutes);
 
 
 app.use("/api/admin", adminRoutes);
+// Root / Health check route
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "Sri Mangalm API",
+    version: "1.0.0",
+    environment: process.env.NODE_ENV || "development",
+    uptime: process.uptime().toFixed(2) + "s"
+  });
+});
 
 
 
