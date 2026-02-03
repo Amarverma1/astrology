@@ -7,11 +7,13 @@ const adminRoutes = require("./routes/admin");
 const app = express();
 app.use(cors());
 app.use(express.json());
+const serviceRoutes = require("./routes/service");
 
 
 
 
 app.use("/api/auth", authRoutes);
+app.use("/api/services", serviceRoutes);
 
 
 app.use("/api/admin", adminRoutes);
