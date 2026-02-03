@@ -8,12 +8,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 const serviceRoutes = require("./routes/service");
+const usersRoutes = require("./routes/users");
+
+
+
 
 
 
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/uploads", express.static("uploads"));
 
 
 app.use("/api/admin", adminRoutes);
