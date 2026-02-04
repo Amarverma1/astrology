@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { registerAdmin, loginAdmin,getAllAstrologers,toggleUserActive,toggleUserBlocked } = require("../controllers/adminController");
+const { registerAdmin, loginAdmin,getAllAstrologers,deleteAstrologer,toggleUserActive,toggleUserBlocked,addAstrologer } = require("../controllers/adminController");
 const authMiddleware = require("../middleware/auth");
 
 // Admin register (optional, you can seed first admin manually)
@@ -12,7 +12,8 @@ router.get("/astrologers", getAllAstrologers);
 router.patch('/users/:userId/toggle-active', toggleUserActive);
 
 router.patch('/users/:userId/toggle-block', toggleUserBlocked);
-
+router.post("/astrologers/add", addAstrologer);
+router.delete("/:userId", deleteAstrologer);
 // Example protected admin route
 router.get("/dashboard", authMiddleware(["admin"]), (req, res) => {
   res.json({ message: "Welcome admin!", user: req.user });

@@ -77,12 +77,84 @@ const loginAdmin = async (req, res) => {
 };
 
 
-
-// ========================================================
-// 🔮 1. Get All Astrologers with Profile + Pricing + Skills
-// ========================================================
 const getAllAstrologers = async (req, res) => {
   try {
+    // 📌 Query parameters from frontend
+    const {
+      search = "",
+      page = 1,
+      limit = 2,
+      is_active,
+      is_blocked,
+      is_verified,
+      is_online,
+      min_rating,
+      max_rating,
+      min_experience,
+      max_experience,
+    } = req.query;
+
+    // Convert page/limit to numbers
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // 🧠 Base WHERE conditions
+    const conditions = [`u.role = 'astrologer'`];
+    const values = [];
+
+    // 🔍 Search filter
+    if (search) {
+      values.push(`%${search.toLowerCase()}%`);
+      conditions.push(
+        `(LOWER(u.name) LIKE $${values.length} OR LOWER(u.email) LIKE $${values.length} OR u.mobile LIKE $${values.length})`
+      );
+    }
+
+    // ✅ Status filters
+    if (is_active !== undefined) {
+      values.push(is_active === "true");
+      conditions.push(`u.is_active = $${values.length}`);
+    }
+
+    if (is_blocked !== undefined) {
+      values.push(is_blocked === "true");
+      conditions.push(`u.is_blocked = $${values.length}`);
+    }
+
+    if (is_verified !== undefined) {
+      values.push(is_verified === "true");
+      conditions.push(`ap.is_verified = $${values.length}`);
+    }
+
+    if (is_online !== undefined) {
+      values.push(is_online === "true");
+      conditions.push(`ap.is_online = $${values.length}`);
+    }
+
+    // ⭐ Rating range
+    if (min_rating) {
+      values.push(parseFloat(min_rating));
+      conditions.push(`ap.rating >= $${values.length}`);
+    }
+    if (max_rating) {
+      values.push(parseFloat(max_rating));
+      conditions.push(`ap.rating <= $${values.length}`);
+    }
+
+    // 🧭 Experience range
+    if (min_experience) {
+      values.push(parseInt(min_experience));
+      conditions.push(`ap.experience_years >= $${values.length}`);
+    }
+    if (max_experience) {
+      values.push(parseInt(max_experience));
+      conditions.push(`ap.experience_years <= $${values.length}`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    // ===============================
+    // 🧮 Query to get paginated result
+    // ===============================
     const query = `
       SELECT 
         u.id AS user_id,
@@ -106,35 +178,47 @@ const getAllAstrologers = async (req, res) => {
         ap.is_online,
         ap.last_seen,
 
-        -- Pricing info
         pr.chat_price_per_min,
         pr.call_price_per_min,
         pr.video_price_per_min,
         pr.currency,
 
-        -- Specializations (comma-separated string)
-        COALESCE(
-          STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name),
-          ''
-        ) AS specializations
+        COALESCE(STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name), '') AS specializations
 
       FROM users u
-      JOIN astrologer_profiles ap ON ap.user_id = u.id
+      LEFT JOIN astrologer_profiles ap ON ap.user_id = u.id
       LEFT JOIN astrologer_pricing pr ON pr.astrologer_id = ap.id
       LEFT JOIN astrologer_specialization_map asm ON asm.astrologer_id = ap.id
       LEFT JOIN astrology_specializations s ON s.id = asm.specialization_id
 
-      WHERE u.role = 'astrologer'
+      ${whereClause}
       GROUP BY 
         u.id, ap.id, pr.chat_price_per_min, pr.call_price_per_min, pr.video_price_per_min, pr.currency
-      ORDER BY u.created_at DESC;
+      ORDER BY u.created_at DESC
+      LIMIT ${limit} OFFSET ${offset};
     `;
 
-    const result = await pool.query(query);
+    const result = await pool.query(query, values);
 
+    // 🧮 Get total count for pagination
+    // Correct count query for pagination
+    const countQuery = `
+  SELECT COUNT(DISTINCT u.id) AS total
+  FROM users u
+  LEFT JOIN astrologer_profiles ap ON ap.user_id = u.id
+  ${whereClause};
+`;
+    const countResult = await pool.query(countQuery, values);
+    const total = parseInt(countResult.rows[0].total);
+
+
+    // ✅ Response
     res.status(200).json({
       success: true,
       count: result.rows.length,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
       astrologers: result.rows,
     });
   } catch (error) {
@@ -226,4 +310,104 @@ const toggleUserBlocked = async (req, res) => {
 
 
 
-module.exports = { registerAdmin, loginAdmin, getAllAstrologers,toggleUserBlocked,toggleUserActive };
+const addAstrologer = async (req, res) => {
+  try {
+    const { name, email, mobile } = req.body;
+
+    // 🧩 Validate input
+    if (!name || !email || !mobile) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, and mobile are required",
+      });
+    }
+
+    // 🧩 Check duplicate (email or mobile)
+    const existing = await pool.query(
+      `SELECT id FROM users WHERE email = $1 OR mobile = $2`,
+      [email, mobile]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Email or mobile already exists",
+      });
+    }
+
+    // 🔐 Generate a default password (hashed)
+    const defaultPassword = "astro@123"; // or generate random if you want
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    // 🧩 Insert new astrologer user
+    const result = await pool.query(
+      `
+      INSERT INTO users (name, email, mobile, password, role, otp_verified, is_active)
+      VALUES ($1, $2, $3, $4, 'astrologer', true, true)
+      RETURNING id, name, email, mobile, role, created_at
+      `,
+      [name, email, mobile, hashedPassword]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Astrologer added successfully",
+      astrologer: result.rows[0],
+      default_password: defaultPassword, // (optional: remove in prod)
+    });
+  } catch (err) {
+    console.error("Add astrologer error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+
+// ========================================================
+// 🚫 5. Delete Astrologer
+// ========================================================
+const deleteAstrologer = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    // Check if the user exists and is an astrologer
+    const existing = await pool.query(
+      `SELECT id FROM users WHERE id = $1 AND role = 'astrologer'`,
+      [userId]
+    );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Astrologer not found",
+      });
+    }
+
+    // Delete the astrologer
+    await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+
+    res.status(200).json({
+      success: true,
+      message: "Astrologer deleted successfully",
+    });
+  } catch (err) {
+    console.error("deleteAstrologer error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+module.exports = { registerAdmin, loginAdmin, getAllAstrologers,deleteAstrologer, toggleUserBlocked, toggleUserActive, addAstrologer };
