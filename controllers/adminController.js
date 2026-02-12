@@ -19,60 +19,22 @@ const registerAdmin = async (req, res) => {
   }
 };
 
-// Admin Login
+
 const loginAdmin = async (req, res) => {
   const { email, password } = req.body;
-
   try {
-    // ✅ Validate input
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
-    }
-
-    // ✅ Fetch admin by email
     const admin = await getAdminByEmail(email);
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
-    }
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
 
-    // ✅ Compare hashed passwords
     const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Incorrect password" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Incorrect password" });
 
-    // ✅ Generate JWT Token
-    const token = jwt.sign(
-      { id: admin.id, role: "admin" },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // ✅ Set token as an HTTP-only cookie (secure in production)
-    res.cookie("admin_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // true on HTTPS
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    const token = jwt.sign({ id: admin.id, role: "admin" }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
     });
-
-    // ✅ Exclude password before sending data
-    const { password: _, ...adminData } = admin;
-
-    // ✅ Send minimal safe data
-    res.status(200).json({
-      message: "Admin login successful",
-      admin: {
-        id: adminData.id,
-        name: adminData.name,
-        email: adminData.email,
-        created_at: adminData.created_at,
-      },
-    });
-
+    res.json({ message: "Admin login successful", token });
   } catch (err) {
-    console.error("Admin login error:", err);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: err.message });
   }
 };
 
