@@ -9,6 +9,10 @@ app.use(cors());
 app.use(express.json());
 const serviceRoutes = require("./routes/service");
 const usersRoutes = require("./routes/users");
+const prokeralaRoutes = require("./routes/astrologyRoutes");
+const astroRoutes = require("./routes/astroRoutes");
+
+
 
 
 
@@ -16,6 +20,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/uploads", express.static("uploads"));
+app.use("/api/astrology", prokeralaRoutes);
+app.use("/api/mangalam", astroRoutes);
+
 
 
 app.use("/api/admin", adminRoutes);
