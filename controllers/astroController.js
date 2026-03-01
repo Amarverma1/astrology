@@ -22,7 +22,7 @@ const getKundli = async (req, res) => {
     }
 
     const response = await axios.get(
-      "https://astro.trisama.cloud/api/kundli",
+      "https://astro.srimangalam.com/api/kundli",
       {
         params: {
           name,
@@ -79,7 +79,7 @@ const getHoroscope = async (req, res) => {
     }
 
     const response = await axios.get(
-      "https://astro.trisama.cloud/api/horoscope",
+      "https://astro.srimangalam.com/api/horoscope",
       {
         params: {
           name,
@@ -150,7 +150,7 @@ const getKundliMatch = async (req, res) => {
     }
 
     const response = await axios.get(
-      "https://astro.trisama.cloud/api/kundli/match",
+      "https://astro.srimangalam.com/api/kundli/match",
       {
         params: {
           boy_name,
