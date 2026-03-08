@@ -191,8 +191,59 @@ const getKundliMatch = async (req, res) => {
 };
 
 
+
+
+
+
+const getPanchang = async (req, res) => {
+  try {
+    const { day, month, year, lat, lon, lang } = req.query;
+
+    // Validation
+    if (!day || !month || !year || !lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required query parameters",
+      });
+    }
+
+    const response = await axios.get(
+      "https://astro.srimangalam.com/api/panchang",
+      {
+        params: {
+          day,
+          month,
+          year,
+          lat,
+          lon,
+          lang: lang || "en",
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: response.data,
+    });
+
+  } catch (error) {
+    console.error("Panchang API Error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch panchang data",
+      error: error.response?.data || error.message,
+    });
+  }
+};
+
+
+
 module.exports = {
   getKundli,
   getHoroscope,
   getKundliMatch,
+  getPanchang,
 };
+
+

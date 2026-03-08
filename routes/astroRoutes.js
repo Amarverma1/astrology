@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { getKundli,getHoroscope,getKundliMatch } = require("../controllers/astroController");
+const { getKundli,getHoroscope,getKundliMatch,getPanchang } = require("../controllers/astroController");
 
 // GET /api/kundli
 router.get("/kundli", getKundli);
@@ -10,5 +10,8 @@ router.get("/horoscope", getHoroscope);
 
 // Kundli Match
 router.get("/kundli/match", getKundliMatch);
+
+// Panchnag
+router.get("/panchang", getPanchang);
 
 module.exports = router;
