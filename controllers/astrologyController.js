@@ -108,4 +108,142 @@ const getDailyHoroscope = async (req, res) => {
 };
 
 
-module.exports = { getPanchang, getDailyHoroscope };
+
+
+const getKundliMatching = async (req, res) => {
+  try {
+    const token = await getAccessToken();
+
+    const {
+      ayanamsa = 1,
+      girl_coordinates,
+      girl_dob,
+      boy_coordinates,
+      boy_dob,
+      language = "en"
+    } = req.body;
+
+    if (!girl_coordinates || !girl_dob || !boy_coordinates || !boy_dob) {
+      return res.status(400).json({
+        error: "Missing required parameters",
+      });
+    }
+
+    const response = await axios.get(
+      "https://api.prokerala.com/v2/astrology/kundli-matching/advanced",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          ayanamsa,
+          girl_coordinates,
+          girl_dob,
+          boy_coordinates,
+          boy_dob,
+          la: language // en or hi
+        },
+      }
+    );
+
+    res.json(response.data);
+
+  } catch (error) {
+    console.error("Kundli Matching API Error:", error.response?.data);
+
+    res.status(500).json({
+      error: error.response?.data || "Something went wrong",
+    });
+  }
+};
+
+
+
+
+const getKundli = async (req, res) => {
+  try {
+    const token = await getAccessToken();
+
+    const {
+      ayanamsa = 1,
+      latitude,
+      longitude,
+      datetime,
+      language = "en",
+      year_length = 1,
+      chart_type = "rasi",
+      chart_style = "north-indian",
+      format = "svg",
+      upagraha_position = "middle"
+    } = req.body;
+
+    if (!latitude || !longitude || !datetime) {
+      return res.status(400).json({
+        error: "latitude, longitude and datetime are required"
+      });
+    }
+
+    // ✅ Kundli (Birth Chart) API
+    const kundliResponse = await axios.get(
+      "https://api.prokerala.com/v2/astrology/kundli/advanced",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          ayanamsa,
+          coordinates: `${latitude},${longitude}`,
+          datetime: datetime,
+          la: language,
+          year_length
+        },
+      }
+    );
+
+    // ✅ Chart API
+    const chartResponse = await axios.get(
+      "https://api.prokerala.com/v2/astrology/chart",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          ayanamsa,
+          coordinates: `${latitude},${longitude}`,
+          datetime: datetime,
+          chart_type,
+          chart_style,
+          format,
+          la: language,
+          upagraha_position
+        }
+      }
+    );
+
+    // Combine both responses
+    res.json({
+      kundli: kundliResponse.data,
+      chart: chartResponse.data
+    });
+
+  } catch (error) {
+    console.error("Kundli + Chart API Error:", error.response?.data);
+
+    res.status(500).json({
+      error: error.response?.data || "Something went wrong",
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+module.exports = { getPanchang, getDailyHoroscope, getKundliMatching,getKundli };
