@@ -1,7 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 const {
   getUserByMobile,
+  getUserByEmail,
   createUser,
   updateOtp,
   verifyOtp,
@@ -9,57 +11,120 @@ const {
 
 require("dotenv").config();
 
+// ---------------------- HELPER: SEND EMAIL OTP ----------------------
+
+
+
+const sendEmailOtp = async (email, otp) => {
+  try {
+
+    const payload = {
+      sender: { name: "AMAR", email: "vamar1435@yourdomain.com" },
+      to: [{ email }],
+      subject: "Your OTP Code",
+      htmlContent: `<p>Your OTP code is: <strong>${otp}</strong></p>`,
+    };
+
+    const headers = {
+      "api-key": process.env.BREVO_API_KEY,
+      "accept": "application/json",
+      "content-type": "application/json",
+    };
+
+    const response = await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      payload,
+      { headers }
+    );
+
+    console.log("Email sent successfully:", response.data);
+
+    return response.data;
+
+  } catch (err) {
+
+    console.error("Error sending OTP email:", err.response?.data || err.message);
+
+    throw new Error("Failed to send OTP email");
+
+  }
+}
 // ---------------------- REQUEST OTP ----------------------
 const requestOtp = async (req, res) => {
-  const { mobile } = req.body; // ❌ role removed
+  const { mobile, email } = req.body;
+
+  if (!mobile && !email) {
+    return res.status(400).json({ message: "Mobile or email is required" });
+  }
 
   try {
-    let user = await getUserByMobile(mobile);
+    let user = null;
 
-    // Dummy OTP for testing
-    const otp = "1234";
+    // Check by mobile first
+    if (mobile) user = await getUserByMobile(mobile);
+
+    // If not found by mobile, check by email
+    if (!user && email) user = await getUserByEmail(email);
+
+    // Generate OTP
+    let otp = "";
+
+    if (mobile) {
+      otp = "1234"; // Fixed OTP for mobile login
+    } else if (email) {
+      otp = Math.floor(1000 + Math.random() * 9000).toString(); // Random OTP for email
+    }
 
     if (user) {
-      // Mobile exists → resend OTP
-      await updateOtp(mobile, otp);
+      // User exists → update OTP
+      await updateOtp(mobile || email, otp);
     } else {
-      // New user → ALWAYS role = 'user'
+      // New user → create
       const hashedPassword = await bcrypt.hash("dummy", 10);
       user = await createUser(
         "New User",
-        mobile,
+        mobile || null,
         hashedPassword,
-        "user" // ✅ fixed role
+        "user",
+        email || null
       );
-      await updateOtp(mobile, otp);
+      await updateOtp(mobile || email, otp);
+    }
+
+    // Send OTP via email if email exists
+    if (email) {
+      await sendEmailOtp(email, otp); // Your Brevo/Sendinblue email logic
     }
 
     res.json({
       message: "OTP sent successfully",
       otp, // ⚠️ remove in production
-      role: user.role, // optional, ok to send
+      role: user.role,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
 // ---------------------- VERIFY OTP & LOGIN ----------------------
 const verifyOtpController = async (req, res) => {
-  const { mobile, otp } = req.body;
+  const { mobile, email, otp } = req.body;
+
+  if (!mobile && !email) {
+    return res.status(400).json({ message: "Mobile or email is required" });
+  }
 
   try {
-    const user = await getUserByMobile(mobile);
+    let user = null;
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (mobile) user = await getUserByMobile(mobile);
+    if (!user && email) user = await getUserByEmail(email);
 
-    // ❌ If user is blocked
+    if (!user) return res.status(404).json({ message: "User not found" });
+
     if (user.is_blocked) {
       return res.status(403).json({
         message:
-          "Your account has been temporarily blocked. Please contact support for assistance.",
+          "Your account has been temporarily blocked. Please contact support.",
       });
     }
 
@@ -67,20 +132,14 @@ const verifyOtpController = async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // Mark OTP as verified
-    await verifyOtp(mobile);
+    await verifyOtp(mobile || user.mobile);
 
-    // Generate JWT
     const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
+      { id: user.id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    // ✅ Safe user data (NO sensitive fields)
     const userData = {
       id: user.id,
       name: user.name,
@@ -104,27 +163,33 @@ const verifyOtpController = async (req, res) => {
 
 // ---------------------- RESEND OTP ----------------------
 const resendOtp = async (req, res) => {
-  const { mobile } = req.body;
+  const { mobile, email } = req.body;
+
+  if (!mobile && !email) {
+    return res.status(400).json({ message: "Mobile or email is required" });
+  }
 
   try {
-    const user = await getUserByMobile(mobile);
+    let user = null;
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (mobile) user = await getUserByMobile(mobile);
+    if (!user && email) user = await getUserByEmail(email);
 
-    // ❌ If user is blocked
+    if (!user) return res.status(404).json({ message: "User not found" });
+
     if (user.is_blocked) {
       return res.status(403).json({
         message:
-          "Your account has been temporarily blocked. Please contact support for assistance.",
+          "Your account has been temporarily blocked. Please contact support.",
       });
     }
 
-    // Dummy OTP for testing
-    const otp = "1234";
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    await updateOtp(mobile || user.mobile, otp);
 
-    await updateOtp(mobile, otp);
+    if (email) {
+      await sendEmailOtp(email, otp);
+    }
 
     res.json({
       message: "OTP resent successfully",
@@ -135,9 +200,10 @@ const resendOtp = async (req, res) => {
   }
 };
 
-
 module.exports = {
   requestOtp,
   verifyOtpController,
   resendOtp,
 };
+
+
