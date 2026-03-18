@@ -84,7 +84,7 @@ const getCart = async (req, res) => {
         id: item.product_id,
         name: item.name,
         price: item.price,
-        img: `http://localhost:5000${item.image}`,
+        img:  item.image,
         stock: item.stock
       }
     }));

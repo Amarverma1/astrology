@@ -18,7 +18,7 @@ router.put(
   uploadProfile.single("profile_image"),
   usersController.updateMyProfile
 );
-
+router.get("/addresses", auth(), usersController.getUserAddresses);
 /**
  * ADMIN ROUTES
  */

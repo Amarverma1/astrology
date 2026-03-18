@@ -40,7 +40,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/assets", express.static("assets"));
 app.use("/api/products", productsRoutes);
 app.use("/api/cart", cartRoutes);
-app.use("/api/orders", orderRoutes);
+app.use("/api/order", orderRoutes);
 app.use("/api/payments", paymentRoutes); 
 
 

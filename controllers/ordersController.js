@@ -86,38 +86,92 @@ const createOrder = async (req, res) => {
 };
 
 const getUserOrders = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
-  const userId = req.user.id;
+    const result = await pool.query(
+      `
+      SELECT 
+        o.*,
 
-  const orders = await pool.query(
-    `SELECT * FROM orders WHERE user_id=$1 ORDER BY created_at DESC`,
-    [userId]
-  );
+        -- total items
+        COUNT(oi.id) AS total_items,
 
-  res.json(orders.rows);
+        -- total quantity
+        COALESCE(SUM(oi.quantity), 0) AS total_quantity,
 
+        -- preview image
+        MIN(p.image) AS preview_image,
+
+        -- preview product name
+        MIN(p.name) AS product_name
+
+      FROM orders o
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.product_id = p.id
+
+      WHERE o.user_id = $1
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+      `,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching user orders:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 };
 
 const getOrderDetails = async (req, res) => {
+  try {
+    const orderId = req.params.id;
 
-  const orderId = req.params.id;
+    // 1️⃣ Fetch order info
+    const orderResult = await pool.query(
+      `SELECT * FROM orders WHERE id = $1`,
+      [orderId]
+    );
 
-  const order = await pool.query(
-    `SELECT * FROM orders WHERE id=$1`,
-    [orderId]
-  );
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-  const items = await pool.query(
-    `SELECT * FROM order_items WHERE order_id=$1`,
-    [orderId]
-  );
+    const order = orderResult.rows[0];
 
-  res.json({
-    order: order.rows[0],
-    items: items.rows
-  });
+    // 2️⃣ Fetch order items with product info
+    const itemsResult = await pool.query(
+      `
+      SELECT 
+        oi.id,
+        oi.order_id,
+        oi.product_id,
+        oi.quantity,
+        oi.price,
+        p.name AS product_name,
+        p.image AS product_image
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = $1
+      `,
+      [orderId]
+    );
 
+    const items = itemsResult.rows.map((item) => ({
+      ...item,
+      name: item.product_name,
+      image: item.product_image,
+    }));
+
+    res.json({ order, items });
+  } catch (error) {
+    console.error("Error fetching order details:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 };
+
+module.exports = { getOrderDetails };
 
 module.exports = {
   createOrder,

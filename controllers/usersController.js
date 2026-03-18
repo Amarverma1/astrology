@@ -156,3 +156,34 @@ exports.updateUserByAdmin = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+exports.getUserAddresses = async (req, res) => {
+  try {
+    const userId = req.user.id; // set by your authentication middleware
+
+    const result = await pool.query(
+      `
+      SELECT 
+        id,
+        user_id,
+        full_name,
+        phone,
+        address,
+        city,
+        pincode,
+        is_default,
+        created_at
+      FROM public.user_addresses
+      WHERE user_id = $1
+      ORDER BY is_default DESC, id ASC
+      `,
+      [userId]
+    );
+
+    res.json({ addresses: result.rows });
+  } catch (error) {
+    console.error("Error fetching user addresses:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
