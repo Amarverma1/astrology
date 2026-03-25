@@ -124,6 +124,7 @@ const getUserOrders = async (req, res) => {
   }
 };
 
+
 const getOrderDetails = async (req, res) => {
   try {
     const orderId = req.params.id;
@@ -171,10 +172,88 @@ const getOrderDetails = async (req, res) => {
   }
 };
 
-module.exports = { getOrderDetails };
+const getAllOrdersAdmin = async (req, res) => {
+  try {
+
+    const result = await pool.query(`
+      SELECT 
+        o.*,
+        u.name AS user_name,
+        u.email,
+
+        COUNT(oi.id) AS total_items,
+        COALESCE(SUM(oi.quantity), 0) AS total_quantity,
+
+        MIN(p.image) AS preview_image,
+        MIN(p.name) AS product_name
+
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.product_id = p.id
+
+      GROUP BY o.id, u.name, u.email
+      ORDER BY o.created_at DESC
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("Admin fetch orders error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateOrderStatus = async (req, res) => {
+  try {
+
+    const orderId = req.params.id;
+    const { status } = req.body;
+
+    const validStatus = [
+      "pending",
+      "confirmed",
+      "processing",
+      "shipped",
+      "delivered",
+      "cancelled"
+    ];
+
+    if (!validStatus.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status"
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders 
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [status, orderId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Order not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      order: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Update order status error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 module.exports = {
   createOrder,
   getUserOrders,
-  getOrderDetails
+  getOrderDetails,
+  getAllOrdersAdmin,
+  updateOrderStatus
 };

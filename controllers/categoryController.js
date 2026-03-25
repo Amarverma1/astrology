@@ -47,16 +47,24 @@ exports.getCategoryBySlug = async (req, res) => {
 };
 
 
-// POST /api/categories
 exports.createCategory = async (req, res) => {
   try {
-    const { name, slug, image, description } = req.body;
+    const { name, slug, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+
+    // ✅ file path
+    const imagePath = req.file
+      ? `/assets/${req.file.filename}`
+      : null;
 
     const result = await pool.query(
       `INSERT INTO categories (name, slug, image, description)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [name, slug, image, description]
+      [name, slug, imagePath, description]
     );
 
     res.status(201).json({
@@ -69,24 +77,34 @@ exports.createCategory = async (req, res) => {
   }
 };
 
-
-// PUT /api/categories/:id
 exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, image, description } = req.body;
+    const { name, slug, description } = req.body;
+
+    // 🔥 get old category
+    const old = await pool.query(
+      "SELECT * FROM categories WHERE id = $1",
+      [id]
+    );
+
+    if (!old.rows.length) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    // ✅ if new image uploaded → use it
+    // ✅ else keep old image
+    const imagePath = req.file
+      ? `/assets/${req.file.filename}`
+      : old.rows[0].image;
 
     const result = await pool.query(
       `UPDATE categories
        SET name=$1, slug=$2, image=$3, description=$4
        WHERE id=$5
        RETURNING *`,
-      [name, slug, image, description, id]
+      [name, slug, imagePath, description, id]
     );
-
-    if (!result.rows.length) {
-      return res.status(404).json({ message: "Category not found" });
-    }
 
     res.json({
       message: "Category updated successfully",
