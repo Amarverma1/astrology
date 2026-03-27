@@ -250,10 +250,60 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+/* DELETE ORDER (ADMIN) */
+const deleteOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    await pool.query("BEGIN");
+
+    // Check if order exists
+    const check = await pool.query(
+      `SELECT * FROM orders WHERE id = $1`,
+      [orderId]
+    );
+
+    if (check.rows.length === 0) {
+      await pool.query("ROLLBACK");
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    // 1️⃣ Delete order items first (important)
+    await pool.query(
+      `DELETE FROM order_items WHERE order_id = $1`,
+      [orderId]
+    );
+
+    // 2️⃣ Delete order
+    await pool.query(
+      `DELETE FROM orders WHERE id = $1`,
+      [orderId]
+    );
+
+    await pool.query("COMMIT");
+
+    res.json({
+      success: true,
+      message: "Order deleted successfully",
+    });
+
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    console.error("Delete order error:", error);
+
+    res.status(500).json({
+      message: "Failed to delete order",
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,
   getOrderDetails,
   getAllOrdersAdmin,
-  updateOrderStatus
+  updateOrderStatus,
+  deleteOrder
 };
